@@ -187,7 +187,7 @@ int main(int argc, char** argv) {
 
     // get param
     std::string topicName[4]={"","","",""};
-    std::array<std::array<double, 6>, 3> installationParam;
+    std::array<std::array<double, 6>, 4> installationParam;
     nh.getParam("altosRcuParameters/radar0/topicName", topicName[0]);
     nh.getParam("altosRcuParameters/radar1/topicName", topicName[1]);
     nh.getParam("altosRcuParameters/radar2/topicName", topicName[2]);
@@ -317,14 +317,13 @@ int main(int argc, char** argv) {
                 switch (radarId)
                 {
                     case 0: calPoint(pointCloudVec0, cloud, installFlag, rcsBuf, vStep,
-                         histBuf,pointNumPerPack);
-                         break;
+                         histBuf,pointNumPerPack); break;
                     case 1: calPoint(pointCloudVec1, cloud, installFlag, rcsBuf, vStep,
-                         histBuf,pointNumPerPack);
+                         histBuf,pointNumPerPack); break;
                     case 2: calPoint(pointCloudVec2, cloud, installFlag, rcsBuf, vStep,
-                         histBuf,pointNumPerPack);
+                         histBuf,pointNumPerPack); break;
                     case 3: calPoint(pointCloudVec3, cloud, installFlag, rcsBuf, vStep,
-                         histBuf,pointNumPerPack);
+                         histBuf,pointNumPerPack); break;
                 }
 
                 //tf
@@ -356,7 +355,7 @@ int main(int argc, char** argv) {
                 marker.header.frame_id=topicName[radarId];
                 marker.header.stamp = ros::Time::now();
                 ostringstream str;
-                str<<topicName[radarId]<<" pointNum: "<<cntPointCloud[0];
+                str<<topicName[radarId]<<" pointNum: "<<cntPointCloud[radarId];
                 marker.text=str.str();
                 marker.pose=pose;
                 markerPub.publish(marker);
