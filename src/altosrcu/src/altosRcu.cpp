@@ -133,12 +133,13 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
                 cloudPoint.x = (pointCloudVec[i].point[j].range)*cos(pointCloudVec[i].point[j].azi)*cos(pointCloudVec[i].point[j].ele); 
                 cloudPoint.y = (pointCloudVec[i].point[j].range)*sin(pointCloudVec[i].point[j].azi)*cos(pointCloudVec[i].point[j].ele);; 
                 cloudPoint.z = (pointCloudVec[i].point[j].range)*sin(pointCloudVec[i].point[j].ele) ; 
-                if(cloudPoint.z < -INSTALLHEIGHT)
-                {
-                    cloudPoint.z = -cloudPoint.z - 2*INSTALLHEIGHT;
-                }
+                // if(cloudPoint.z < -INSTALLHEIGHT)
+                // {
+                //    cloudPoint.z = -cloudPoint.z - 2*INSTALLHEIGHT;
+                // }
                 cloudPoint.h = pointCloudVec[i].point[j].doppler; 
-                cloudPoint.s = pointCloudVec[i].point[j].snr;//rcsCal(pointCloudVec[i].point[j].range,pointCloudVec[i].point[j].azi,pointCloudVec[i].point[j].snr,rcsBuf);
+                cloudPoint.s = pointCloudVec[i].point[j].snr;
+                //rcsCal(pointCloudVec[i].point[j].range,pointCloudVec[i].point[j].azi,pointCloudVec[i].point[j].snr,rcsBuf);
                 cloud->push_back(cloudPoint);
             }
         }
@@ -285,7 +286,7 @@ int main(int argc, char** argv) {
         int ret = recvfrom(sockfd, recvBuf, sizeof(POINTCLOUD), 0, (struct sockaddr *)&from, &len);
         if (ret > 0)
 		{
-            radarId = pointCloudBuf.pckHeader.reserved[0]+1;
+            radarId = pointCloudBuf.pckHeader.reserved[0];
             curObjInd[radarId] = pointCloudBuf.pckHeader.curObjInd;
             // mode = pointCloudBuf.pckHeader.mode;
             cntPointCloud[radarId] = pointCloudBuf.pckHeader.objectCount;

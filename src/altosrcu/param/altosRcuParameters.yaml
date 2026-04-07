@@ -1,4 +1,5 @@
 altosRcuParameters:
+    # radar0-3 = port from left to right 
     radar0:
         topicName: 'radarFL' # used as topic name and frame ID
         installationParam: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # x [m], y [m], z [m], roll [rad], pitch [rad], yaw [rad]
