@@ -18,6 +18,9 @@
 #include <unistd.h>
 #include <vector>
 #include <visualization_msgs/Marker.h>
+#include <tf/tf.h>
+#include <tf/transform_broadcaster.h>
+#include <array>
 using namespace std;
 #define widthSet 8000
 #define vrMax 60
@@ -31,6 +34,7 @@ using namespace std;
 #define UNIPORT 4041
 #define UNIFLAG 0
 #define INSTALLHEIGHT 1.85
+#define BASEFRAMEID "base"
 
 float rcsCal(float range, float azi, float snr, float* rcsBuf) {
     int ind = (azi * 180 / PI + 60.1) * 10;
@@ -86,15 +90,6 @@ int socketGen()
         }
     }
 
-
-    // req.imr_multiaddr.s_addr = inet_addr(GROUPIP);
-    // req.imr_interface.s_addr = inet_addr(/*"0.0.0.0"*/ "192.168.3.1");
-    // ;
-    // ret = setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &req, sizeof(req));
-    // if (ret < 0) {
-    //     perror("setsockopt");
-    //     return 0;
-    // }
     return sockfd;
 }
 
@@ -173,24 +168,59 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
 }
 
 int main(int argc, char** argv) {
+    
     // rcs read
     float* rcsBuf = (float*)malloc(1201 * sizeof(float));
     FILE* fp_rcs = fopen("data//rcs.dat", "rb");
+    if (fp_rcs == NULL)
+    {
+        printf("[WARNING] data/rcs.dat not found in pwd [WARNING]\n");
+        return 0;
+    } 
     fread(rcsBuf, 1201, sizeof(float), fp_rcs);
     fclose(fp_rcs);
 
     // ros Init
-    ros::init(argc, argv, "altosRadar");
+    ros::init(argc, argv, "altosRcu");
     ros::NodeHandle nh;
-    ros::Publisher pub = nh.advertise<sensor_msgs::PointCloud2>("altosRadar", 1);
+
+    // get param
+    std::string topicName[4]={"","","",""};
+    std::array<std::array<double, 6>, 3> installationParam;
+    nh.getParam("altosRcuParameters/radar0/topicName", topicName[0]);
+    nh.getParam("altosRcuParameters/radar1/topicName", topicName[1]);
+    nh.getParam("altosRcuParameters/radar2/topicName", topicName[2]);
+    nh.getParam("altosRcuParameters/radar3/topicName", topicName[3]);
+
+    std::vector<double> tempVec;
+    nh.getParam("altosRcuParameters/radar0/installationParam", tempVec);
+    std::copy(tempVec.begin(), tempVec.end(), installationParam[0].begin());
+    nh.getParam("altosRcuParameters/radar1/installationParam", tempVec);
+    std::copy(tempVec.begin(), tempVec.end(), installationParam[1].begin());
+    nh.getParam("altosRcuParameters/radar2/installationParam", tempVec);
+    std::copy(tempVec.begin(), tempVec.end(), installationParam[2].begin());
+    nh.getParam("altosRcuParameters/radar3/installationParam", tempVec);
+    std::copy(tempVec.begin(), tempVec.end(), installationParam[3].begin());
+
+    //pub
+    ros::Publisher pubArray[4];
+    pubArray[0]=nh.advertise<sensor_msgs::PointCloud2>(topicName[0], 1);
+    pubArray[1]=nh.advertise<sensor_msgs::PointCloud2>(topicName[1], 1);
+    pubArray[2]=nh.advertise<sensor_msgs::PointCloud2>(topicName[2], 1);
+    pubArray[3]=nh.advertise<sensor_msgs::PointCloud2>(topicName[3], 1);
     ros::Publisher markerPub = nh.advertise<visualization_msgs::Marker>("TEXT_VIEW_FACING", 10);
     ros::Publisher originPub = nh.advertise<visualization_msgs::Marker>("origin", 10);
+
+    //tf
+    static tf::TransformBroadcaster tfBr;
+    tf::Transform transform;
+    tf::Quaternion q;
 
     sensor_msgs::PointCloud2 output;
     pcl::PointCloud<pcl::PointXYZHSV>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZHSV>);
 
     visualization_msgs::Marker origin;
-    origin.header.frame_id = "altosRadar";
+    origin.header.frame_id = BASEFRAMEID;
     origin.type = visualization_msgs::Marker::SPHERE;
     origin.action = visualization_msgs::Marker::ADD;
 
@@ -225,12 +255,14 @@ int main(int argc, char** argv) {
     pose.position.x =  (float)-5;
     pose.position.y =  0;
     pose.position.z =0;
+    
     // socket Gen
     struct sockaddr_in  from;
     socklen_t           len = sizeof(from);
     int                 sockfd = socketGen();
+    
     // pointcloud recv para
-    vector<POINTCLOUD>  pointCloudVec;
+    vector<POINTCLOUD>  pointCloudVec0, pointCloudVec1, pointCloudVec2, pointCloudVec3;
     POINTCLOUD          pointCloudBuf;
     char*               recvBuf = (char*)&pointCloudBuf;
     int                 installFlag = -1;
@@ -239,34 +271,37 @@ int main(int argc, char** argv) {
     int                 recvFrameLen = 0;
     int                 frameNum = 0;
     int                 frameId[2] = {0, 0};
-    int                 cntPointCloud[2] = {0, 0};
+    int                 cntPointCloud[4] = {0, 0, 0, 0};
     float               vrEst = 0;
-    unsigned short      curObjInd;
+    unsigned short      curObjInd[4] = {0, 0, 0, 0};
+    unsigned int        radarId;
     unsigned char       mode;
     float*              histBuf = (float*)malloc(sizeof(float) * int((vrMax - vrMin) / vStep));
-
-    // pointcloud record init
-    char                filePath[1024];
-    struct              timeval tv;
-    struct              tm tm;
-    gettimeofday(&tv, NULL);
-    localtime_r(&tv.tv_sec, &tm);
-    sprintf(filePath, "data//%d_%d_%d_%d_%d_%d_altos.dat", tm.tm_year + 1900,
-            tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-    FILE* fp = fopen(filePath, "wb");
 
     while(ros::ok())
     {
         memset(recvBuf,0,sizeof(POINTCLOUD));
+        // printf("%s",topicName[0].c_str()); //debug
         int ret = recvfrom(sockfd, recvBuf, sizeof(POINTCLOUD), 0, (struct sockaddr *)&from, &len);
         if (ret > 0)
 		{
-            fwrite(recvBuf, 1, ret, fp);
-            curObjInd = pointCloudBuf.pckHeader.curObjInd;
-            mode = pointCloudBuf.pckHeader.mode;
-            cntPointCloud[mode] = pointCloudBuf.pckHeader.objectCount;
-            pointCloudVec.push_back(pointCloudBuf);
-            if (((curObjInd + 1) * pointNumPerPack >= pointCloudBuf.pckHeader.objectCount)) {
+            radarId = pointCloudBuf.pckHeader.reserved[0]+1;
+            curObjInd[radarId] = pointCloudBuf.pckHeader.curObjInd;
+            // mode = pointCloudBuf.pckHeader.mode;
+            cntPointCloud[radarId] = pointCloudBuf.pckHeader.objectCount;
+            switch (radarId)
+            {
+                case 0: pointCloudVec0.push_back(pointCloudBuf);break;
+                case 1: pointCloudVec1.push_back(pointCloudBuf);break;
+                case 2: pointCloudVec2.push_back(pointCloudBuf);break;
+                case 3: pointCloudVec3.push_back(pointCloudBuf);break;
+                default:
+                    ROS_ERROR("wrong radarId = %u in PCKHEADER.reserved", radarId);
+                    continue; 
+                    
+            }
+            
+            if (((curObjInd[radarId] + 1) * pointNumPerPack >= pointCloudBuf.pckHeader.objectCount)) {
                 // if (pointCloudVec.size() * pointNumPerPack < cntPointCloud[0] + cntPointCloud[1]) {
                 //     printf(
                 //         "FrameId %d %ld Loss %ld pack(s) in %d "
@@ -278,37 +313,71 @@ int main(int argc, char** argv) {
                 //         int(ceil(cntPointCloud[0] / pointNumPerPack) +
                 //             ceil(cntPointCloud[1] / pointNumPerPack)));
                 // }
-                calPoint(pointCloudVec, cloud, installFlag, rcsBuf, vStep,
+                switch (radarId)
+                {
+                    case 0: calPoint(pointCloudVec0, cloud, installFlag, rcsBuf, vStep,
                          histBuf,pointNumPerPack);
-                pcl::toROSMsg(*cloud, output);
-                output.header.frame_id = "altosRadar";
+                         break;
+                    case 1: calPoint(pointCloudVec1, cloud, installFlag, rcsBuf, vStep,
+                         histBuf,pointNumPerPack);
+                    case 2: calPoint(pointCloudVec2, cloud, installFlag, rcsBuf, vStep,
+                         histBuf,pointNumPerPack);
+                    case 3: calPoint(pointCloudVec3, cloud, installFlag, rcsBuf, vStep,
+                         histBuf,pointNumPerPack);
+                }
 
-                marker.header.frame_id="altosRadar";
+                //tf
+                transform.setOrigin(tf::Vector3(installationParam[radarId][0], installationParam[radarId][1], installationParam[radarId][2])); // x, y, z
+                q.setRPY(installationParam[radarId][3], installationParam[radarId][4], installationParam[radarId][5]); // roll, pitch, yaw
+                transform.setRotation(q);
+                tfBr.sendTransform(
+                    tf::StampedTransform(
+                        transform,
+                        ros::Time::now(),
+                        BASEFRAMEID,
+                        topicName[radarId]
+                        )
+                    );
+
+                //pub point cloud
+                pcl::toROSMsg(*cloud, output);
+                output.header.frame_id = topicName[radarId];
+                output.header.stamp = ros::Time::now();; 
+                printf("pointNum of %d frame of %s: %d\n",
+                       pointCloudBuf.pckHeader.frameId,
+                       topicName[radarId].c_str(),
+                       cntPointCloud[radarId]);
+                output.header.stamp = ros::Time::now();
+                pubArray[radarId].publish(output);
+
+                originPub.publish(origin);
+
+                marker.header.frame_id=topicName[radarId];
                 marker.header.stamp = ros::Time::now();
                 ostringstream str;
-                str<<"pointNum:"<<cntPointCloud[0];
+                str<<topicName[radarId]<<" pointNum: "<<cntPointCloud[0];
                 marker.text=str.str();
                 marker.pose=pose;
                 markerPub.publish(marker);
-                output.header.stamp = ros::Time::now();; 
-                originPub.publish(origin);
-                printf("0 pointNum of %d frame: %d\n",
-                       pointCloudBuf.pckHeader.frameId,
-                       cntPointCloud[0] + cntPointCloud[1]);
-                output.header.stamp = ros::Time::now();
-                pub.publish(output);
-                pointCloudVec.clear();
+
+                // clear
+                switch (radarId)
+                {
+                    case 0: pointCloudVec0.clear(); break;
+                    case 1: pointCloudVec1.clear(); break;
+                    case 2: pointCloudVec2.clear(); break;
+                    case 3: pointCloudVec3.clear(); break;
+                }
+                
                 cloud.reset(new pcl::PointCloud<pcl::PointXYZHSV>);
-                cntPointCloud[0] = 0;
-                cntPointCloud[1] = 0;
+                cntPointCloud[radarId] = 0;
             }
         } else {
-            printf("recv failed (timeOut)   %d\n", ret);
+            // printf("recv failed (timeOut)   %d\n", ret);
         }
     }
 
     close(sockfd);
     free(histBuf);
-    fclose(fp);
     return 0;
 }

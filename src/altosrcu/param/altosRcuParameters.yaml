@@ -1,0 +1,13 @@
+altosRcuParameters:
+    radar0:
+        topicName: 'radarFL' # used as topic name and frame ID
+        installationParam: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # x [m], y [m], z [m], roll [rad], pitch [rad], yaw [rad]
+    radar1:
+        topicName: 'radarFR' # used as topic name and frame ID
+        installationParam: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # x [m], y [m], z [m], roll [rad], pitch [rad], yaw [rad]
+    radar2:
+        topicName: 'radarRL' # used as topic name and frame ID
+        installationParam: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # x [m], y [m], z [m], roll [rad], pitch [rad], yaw [rad]
+    radar3:
+        topicName: 'radarRR' # used as topic name and frame ID
+        installationParam: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # x [m], y [m], z [m], roll [rad], pitch [rad], yaw [rad]

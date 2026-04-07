@@ -1,6 +1,5 @@
 source devel/setup.bash
-#gnome-terminal --tab -t "rviz1" -e  'bash -c "roslaunch rviz1.launch;read"'
-#sleep 2s
-#gnome-terminal --tab -t "rviz2" -e  'bash -c "roslaunch rviz2.launch;read"'
-sleep 1s
-gnome-terminal --tab -t "altosradar" -e  'bash -c "rosrun altosradar altosRadarParse;read"'
+gnome-terminal --tab -t "rviz" -e  'bash -c "roslaunch rviz.launch;read"'
+sleep 2s
+rosparam load ./src/altosrcu/param/altosRcuParameters.yaml
+gnome-terminal --tab -t "altosRadarRcu" -e  'bash -c "rosrun altosrcu altosrcu;read"'
