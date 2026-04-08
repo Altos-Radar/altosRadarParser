@@ -36,6 +36,18 @@ using namespace std;
 #define INSTALLHEIGHT 1.85
 #define BASEFRAMEID "base"
 
+struct RadarUnit
+{
+    std::string topicName;
+    std::array<double, 6> installParam;
+    ros::Publisher pubCloud;
+
+    vector<POINTCLOUD> pointCloudVec;
+
+    int cntPointCloud = 0;
+    unsigned short curObjInd = 0;
+};
+
 float rcsCal(float range, float azi, float snr, float* rcsBuf) {
     int ind = (azi * 180 / PI + 60.1) * 10;
     float rcs = powf32(range, 2.6) * snr / 5.0e6 / rcsBuf[ind];
@@ -103,12 +115,8 @@ float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf, float step) {
                 vr = pointCloudVec[i].point[j].doppler /
                      cos(pointCloudVec[i].point[j].azi);
                 ind = (vr - vrMin) / step;
-                if (vr > 60 || vr < -60 || isnan(vr)) {
-                    continue;
-                }
-                if (vr <= 0) {
-                    histBuf[ind]++;
-                }
+                if (vr > vrMax || vr < vrMin || isnan(vr)) continue;
+                if (vr <= 0) histBuf[ind]++;
             }
         }
     }
@@ -130,8 +138,10 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
             {
                 pointCloudVec[i].point[j].ele = installFlag*(pointCloudVec[i].point[j].ele+0*PI/180);
 
-                cloudPoint.x = (pointCloudVec[i].point[j].range)*cos(pointCloudVec[i].point[j].azi)*cos(pointCloudVec[i].point[j].ele); 
-                cloudPoint.y = (pointCloudVec[i].point[j].range)*sin(pointCloudVec[i].point[j].azi)*cos(pointCloudVec[i].point[j].ele);; 
+                float azi = pointCloudVec[i].point[j].azi;
+                float cosEle = cos(pointCloudVec[i].point[j].ele); 
+                cloudPoint.x = (pointCloudVec[i].point[j].range)*cos(azi)*cosEle; 
+                cloudPoint.y = (pointCloudVec[i].point[j].range)*sin(azi)*cosEle;
                 cloudPoint.z = (pointCloudVec[i].point[j].range)*sin(pointCloudVec[i].point[j].ele) ; 
                 // if(cloudPoint.z < -INSTALLHEIGHT)
                 // {
@@ -170,12 +180,15 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
 
 int main(int argc, char** argv) {
     
+    const int RADARNUM = 4;
+    std::array<RadarUnit, RADARNUM> radars;
+
     // rcs read
     float* rcsBuf = (float*)malloc(1201 * sizeof(float));
     FILE* fp_rcs = fopen("data//rcs.dat", "rb");
     if (fp_rcs == NULL)
     {
-        printf("[WARNING] data/rcs.dat not found in pwd [WARNING]\n");
+        ROS_ERROR("[WARNING] data/rcs.dat not found in pwd [WARNING]\n");
         return 0;
     } 
     fread(rcsBuf, 1201, sizeof(float), fp_rcs);
@@ -185,40 +198,29 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "altosRcu");
     ros::NodeHandle nh;
 
-    // get param
-    std::string topicName[4]={"","","",""};
-    std::array<std::array<double, 6>, 4> installationParam;
-    nh.getParam("altosRcuParameters/radar0/topicName", topicName[0]);
-    nh.getParam("altosRcuParameters/radar1/topicName", topicName[1]);
-    nh.getParam("altosRcuParameters/radar2/topicName", topicName[2]);
-    nh.getParam("altosRcuParameters/radar3/topicName", topicName[3]);
-
-    std::vector<double> tempVec;
-    nh.getParam("altosRcuParameters/radar0/installationParam", tempVec);
-    std::copy(tempVec.begin(), tempVec.end(), installationParam[0].begin());
-    nh.getParam("altosRcuParameters/radar1/installationParam", tempVec);
-    std::copy(tempVec.begin(), tempVec.end(), installationParam[1].begin());
-    nh.getParam("altosRcuParameters/radar2/installationParam", tempVec);
-    std::copy(tempVec.begin(), tempVec.end(), installationParam[2].begin());
-    nh.getParam("altosRcuParameters/radar3/installationParam", tempVec);
-    std::copy(tempVec.begin(), tempVec.end(), installationParam[3].begin());
-
-    //pub
-    ros::Publisher pubArray[4];
-    pubArray[0]=nh.advertise<sensor_msgs::PointCloud2>(topicName[0], 1);
-    pubArray[1]=nh.advertise<sensor_msgs::PointCloud2>(topicName[1], 1);
-    pubArray[2]=nh.advertise<sensor_msgs::PointCloud2>(topicName[2], 1);
-    pubArray[3]=nh.advertise<sensor_msgs::PointCloud2>(topicName[3], 1);
+    for (int radarId = 0; radarId < RADARNUM; radarId++)
+    {
+        std::string paramPath = "altosRcuParameters/radar" + std::to_string(radarId);
+        nh.getParam(paramPath + "/topicName", radars[radarId].topicName);
+        std::vector<double> tmpVec;
+        nh.getParam(paramPath + "/installationParam", tmpVec);
+        std::copy(tmpVec.begin(), tmpVec.end(), radars[radarId].installParam.begin());
+    
+        if (radars[radarId].topicName.empty())
+        {
+            ROS_ERROR("radar%d topic name is empty!", radarId);
+            return -1;
+        }
+        radars[radarId].pubCloud = nh.advertise<sensor_msgs::PointCloud2>(
+            radars[radarId].topicName , 1);
+    }
+    
     ros::Publisher markerPub = nh.advertise<visualization_msgs::Marker>("TEXT_VIEW_FACING", 10);
     ros::Publisher originPub = nh.advertise<visualization_msgs::Marker>("origin", 10);
 
-    //tf
-    static tf::TransformBroadcaster tfBr;
-    tf::Transform transform;
-    tf::Quaternion q;
-
     sensor_msgs::PointCloud2 output;
     pcl::PointCloud<pcl::PointXYZHSV>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZHSV>);
+    cloud->reserve(10000);
 
     visualization_msgs::Marker origin;
     origin.header.frame_id = BASEFRAMEID;
@@ -256,6 +258,10 @@ int main(int argc, char** argv) {
     pose.position.x =  (float)-5;
     pose.position.y =  0;
     pose.position.z =0;
+
+    tf::Transform transform;
+    tf::Quaternion q;
+    static tf::TransformBroadcaster tfBr;
     
     // socket Gen
     struct sockaddr_in  from;
@@ -263,18 +269,13 @@ int main(int argc, char** argv) {
     int                 sockfd = socketGen();
     
     // pointcloud recv para
-    vector<POINTCLOUD>  pointCloudVec0, pointCloudVec1, pointCloudVec2, pointCloudVec3;
     POINTCLOUD          pointCloudBuf;
     char*               recvBuf = (char*)&pointCloudBuf;
     int                 installFlag = -1;
     int                 pointNumPerPack = 30;
     int                 pointSizeByte = 44;
     int                 recvFrameLen = 0;
-    int                 frameNum = 0;
-    int                 frameId[2] = {0, 0};
-    int                 cntPointCloud[4] = {0, 0, 0, 0};
     float               vrEst = 0;
-    unsigned short      curObjInd[4] = {0, 0, 0, 0};
     unsigned int        radarId;
     unsigned char       mode;
     float*              histBuf = (float*)malloc(sizeof(float) * int((vrMax - vrMin) / vStep));
@@ -287,97 +288,78 @@ int main(int argc, char** argv) {
         if (ret > 0)
 		{
             radarId = pointCloudBuf.pckHeader.reserved[0];
-            curObjInd[radarId] = pointCloudBuf.pckHeader.curObjInd;
+            radars[radarId].curObjInd = pointCloudBuf.pckHeader.curObjInd;
             // mode = pointCloudBuf.pckHeader.mode;
-            cntPointCloud[radarId] = pointCloudBuf.pckHeader.objectCount;
-            switch (radarId)
+            radars[radarId].cntPointCloud = pointCloudBuf.pckHeader.objectCount;
+            if (radarId >= RADARNUM)
             {
-                case 0: pointCloudVec0.push_back(pointCloudBuf);break;
-                case 1: pointCloudVec1.push_back(pointCloudBuf);break;
-                case 2: pointCloudVec2.push_back(pointCloudBuf);break;
-                case 3: pointCloudVec3.push_back(pointCloudBuf);break;
-                default:
-                    ROS_ERROR("wrong radarId = %u in PCKHEADER.reserved", radarId);
-                    continue; 
-                    
+                ROS_ERROR("radarId = %u in PCKHEADER.reserved > %u ", radarId, RADARNUM);
+                continue; 
             }
+            radars[radarId].pointCloudVec.push_back(pointCloudBuf);
             
-            if (((curObjInd[radarId] + 1) * pointNumPerPack >= pointCloudBuf.pckHeader.objectCount)) {
-                // if (pointCloudVec.size() * pointNumPerPack < cntPointCloud[0] + cntPointCloud[1]) {
-                //     printf(
-                //         "FrameId %d %ld Loss %ld pack(s) in %d "
-                //         "packs------------------------\n",
-                //         pointCloudBuf.pckHeader.frameId, pointCloudVec.size(),
-                //         int(ceil(cntPointCloud[0] / pointNumPerPack) +
-                //             ceil(cntPointCloud[1] / pointNumPerPack)) -
-                //             pointCloudVec.size(),
-                //         int(ceil(cntPointCloud[0] / pointNumPerPack) +
-                //             ceil(cntPointCloud[1] / pointNumPerPack)));
-                // }
-                switch (radarId)
-                {
-                    case 0: calPoint(pointCloudVec0, cloud, installFlag, rcsBuf, vStep,
-                         histBuf,pointNumPerPack); break;
-                    case 1: calPoint(pointCloudVec1, cloud, installFlag, rcsBuf, vStep,
-                         histBuf,pointNumPerPack); break;
-                    case 2: calPoint(pointCloudVec2, cloud, installFlag, rcsBuf, vStep,
-                         histBuf,pointNumPerPack); break;
-                    case 3: calPoint(pointCloudVec3, cloud, installFlag, rcsBuf, vStep,
-                         histBuf,pointNumPerPack); break;
-                }
+            if (((radars[radarId].curObjInd + 1) * pointNumPerPack >= pointCloudBuf.pckHeader.objectCount))
+            {
+                calPoint(radars[radarId].pointCloudVec, cloud, installFlag, rcsBuf, vStep,
+                         histBuf,pointNumPerPack);
 
-                //tf
-                transform.setOrigin(tf::Vector3(installationParam[radarId][0], installationParam[radarId][1], installationParam[radarId][2])); // x, y, z
-                q.setRPY(installationParam[radarId][3], installationParam[radarId][4], installationParam[radarId][5]); // roll, pitch, yaw
+                // tf
+                transform.setOrigin(
+                    tf::Vector3(
+                        radars[radarId].installParam[0],
+                        radars[radarId].installParam[1], 
+                        radars[radarId].installParam[2]
+                    )
+                ); // x, y, z
+                q.setRPY(
+                    radars[radarId].installParam[3], 
+                    radars[radarId].installParam[4], 
+                    radars[radarId].installParam[5]
+                ); // roll, pitch, yaw
                 transform.setRotation(q);
                 tfBr.sendTransform(
                     tf::StampedTransform(
                         transform,
                         ros::Time::now(),
                         BASEFRAMEID,
-                        topicName[radarId]
-                        )
-                    );
+                        radars[radarId].topicName
+                    )
+                );
 
                 //pub point cloud
                 pcl::toROSMsg(*cloud, output);
-                output.header.frame_id = topicName[radarId];
+                output.header.frame_id = radars[radarId].topicName;
                 output.header.stamp = ros::Time::now();; 
-                printf("pointNum of %d frame of %s: %d\n",
+                ROS_INFO("pointNum of %d frame of %s: %d\n",
                        pointCloudBuf.pckHeader.frameId,
-                       topicName[radarId].c_str(),
-                       cntPointCloud[radarId]);
+                       radars[radarId].topicName.c_str(),
+                       radars[radarId].cntPointCloud);
                 output.header.stamp = ros::Time::now();
-                pubArray[radarId].publish(output);
+                radars[radarId].pubCloud.publish(output);
 
                 originPub.publish(origin);
 
-                marker.header.frame_id=topicName[radarId];
+                marker.header.frame_id=radars[radarId].topicName;
                 marker.header.stamp = ros::Time::now();
                 ostringstream str;
-                str<<topicName[radarId]<<" pointNum: "<<cntPointCloud[radarId];
+                str<<radars[radarId].topicName<<" pointNum: "<<radars[radarId].cntPointCloud;
                 marker.text=str.str();
                 marker.pose=pose;
                 markerPub.publish(marker);
 
                 // clear
-                switch (radarId)
-                {
-                    case 0: pointCloudVec0.clear(); break;
-                    case 1: pointCloudVec1.clear(); break;
-                    case 2: pointCloudVec2.clear(); break;
-                    case 3: pointCloudVec3.clear(); break;
-                }
-                
-                cloud.reset(new pcl::PointCloud<pcl::PointXYZHSV>);
-                cntPointCloud[radarId] = 0;
+                radars[radarId].pointCloudVec.clear();
+                cloud->clear();
+                radars[radarId].cntPointCloud = 0;
             }
         } else {
-            // printf("recv failed (timeOut)   %d\n", ret);
+            ROS_ERROR("recv failed (timeOut)   %d\n", ret);
         }
     }
 
     close(sockfd);
+    free(histBuf);
+    free(rcsBuf);
     free(histBuf);
     return 0;
 }
