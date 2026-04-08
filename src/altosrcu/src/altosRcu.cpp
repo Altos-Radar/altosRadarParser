@@ -204,6 +204,10 @@ int main(int argc, char** argv) {
         nh.getParam(paramPath + "/topicName", radars[radarId].topicName);
         std::vector<double> tmpVec;
         nh.getParam(paramPath + "/installationParam", tmpVec);
+        for (double& angle : tmpVec)
+        {
+            angle = angle * PI / 180.0;
+        }
         std::copy(tmpVec.begin(), tmpVec.end(), radars[radarId].installParam.begin());
     
         if (radars[radarId].topicName.empty())
