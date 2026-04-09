@@ -63,7 +63,7 @@ int socketGen()
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (-1 == sockfd) {
         perror("socket");
-        return 0;
+        return -1;
     }
     struct timeval timeout = {1, 300};
     setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout,
@@ -79,7 +79,7 @@ int socketGen()
         int ret = bind(sockfd, (struct sockaddr*)&addr, sizeof(addr));
         if (-1 == ret) {
             perror("bind");
-            return 0;
+            return -1;
         }
     }else
     {
@@ -89,7 +89,7 @@ int socketGen()
         int ret = bind(sockfd, (struct sockaddr*)&addr, sizeof(addr));
         if (-1 == ret) {
             perror("bind");
-            return 0;
+            return -1;
         }
 
         req.imr_multiaddr.s_addr = inet_addr(GROUPIP);
@@ -98,7 +98,7 @@ int socketGen()
         ret = setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &req, sizeof(req));
         if (ret < 0) {
             perror("setsockopt");
-            return 0;
+            return -1;
         }
     }
 
@@ -189,7 +189,7 @@ int main(int argc, char** argv) {
     if (fp_rcs == NULL)
     {
         ROS_ERROR("[WARNING] data/rcs.dat not found in pwd [WARNING]\n");
-        return 0;
+        return -1;
     } 
     fread(rcsBuf, 1201, sizeof(float), fp_rcs);
     fclose(fp_rcs);
@@ -204,9 +204,14 @@ int main(int argc, char** argv) {
         nh.getParam(paramPath + "/topicName", radars[radarId].topicName);
         std::vector<double> tmpVec;
         nh.getParam(paramPath + "/installationParam", tmpVec);
-        for (double& angle : tmpVec)
+        if (tmpVec.size() != 6)
         {
-            angle = angle * PI / 180.0;
+            ROS_ERROR("Radar %d: Invalid installation parameters! Required 6 values, got %ld.", radarId, tmpVec.size());
+            return -1;
+        }
+        for (int i = 3; i < 6; i++)
+        {
+            tmpVec[i] = tmpVec[i] * PI / 180.0;
         }
         std::copy(tmpVec.begin(), tmpVec.end(), radars[radarId].installParam.begin());
     
@@ -365,5 +370,5 @@ int main(int argc, char** argv) {
     free(histBuf);
     free(rcsBuf);
     free(histBuf);
-    return 0;
+    return -1;
 }
