@@ -22,7 +22,6 @@
 #include <tf/transform_broadcaster.h>
 #include <array>
 using namespace std;
-#define widthSet 8000
 #define vrMax 60
 #define vrMin -60
 #define vStep 0.1
@@ -292,13 +291,11 @@ int main(int argc, char** argv) {
     while(ros::ok())
     {
         memset(recvBuf,0,sizeof(POINTCLOUD));
-        // printf("%s",topicName[0].c_str()); //debug
         int ret = recvfrom(sockfd, recvBuf, sizeof(POINTCLOUD), 0, (struct sockaddr *)&from, &len);
         if (ret > 0)
 		{
             radarId = pointCloudBuf.pckHeader.reserved[0];
             radars[radarId].curObjInd = pointCloudBuf.pckHeader.curObjInd;
-            // mode = pointCloudBuf.pckHeader.mode;
             radars[radarId].cntPointCloud = pointCloudBuf.pckHeader.objectCount;
             if (radarId >= RADARNUM)
             {
@@ -338,7 +335,7 @@ int main(int argc, char** argv) {
                 //pub point cloud
                 pcl::toROSMsg(*cloud, output);
                 output.header.frame_id = radars[radarId].topicName;
-                output.header.stamp = ros::Time::now();; 
+                output.header.stamp = ros::Time::now();
                 ROS_INFO("pointNum of %d frame of %s: %d\n",
                        pointCloudBuf.pckHeader.frameId,
                        radars[radarId].topicName.c_str(),
