@@ -104,13 +104,17 @@ int socketGen()
     return sockfd;
 }
 
-float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf, float step) {
+float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf, float step)
+{
     int ind = 0;
     float vr = 0;
 
-    for (int i = 0; i < pointCloudVec.size(); i++) {
-        for (int j = 0; j < 30; j++) {
-            if (abs(pointCloudVec[i].point[j].range) > 0) {
+    for (int i = 0; i < pointCloudVec.size(); i++)
+    {
+        for (int j = 0; j < 30; j++)
+        {
+            if (abs(pointCloudVec[i].point[j].range) > 0)
+            {
                 vr = pointCloudVec[i].point[j].doppler /
                      cos(pointCloudVec[i].point[j].azi);
                 ind = (vr - vrMin) / step;
@@ -119,11 +123,7 @@ float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf, float step) {
             }
         }
     }
-    return float(
-               (max_element(histBuf, histBuf + (int((vrMax - vrMin) / step))) -
-                histBuf)) *
-               step +
-           vrMin;
+    return float((max_element(histBuf, histBuf + (int((vrMax - vrMin) / step))) - histBuf)) * step + vrMin;
 }
 
 void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>::Ptr cloud,int installFlag,float *rcsBuf,float step,float *histBuf,int pointNumPerPack)
@@ -366,6 +366,5 @@ int main(int argc, char** argv) {
     close(sockfd);
     free(histBuf);
     free(rcsBuf);
-    free(histBuf);
     return -1;
 }
