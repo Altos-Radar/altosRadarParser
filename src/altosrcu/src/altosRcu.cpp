@@ -32,8 +32,8 @@ using namespace std;
 #define LOCALIP "192.168.3.1"
 #define UNIPORT 4041
 #define UNIFLAG 0
+#define FLIPELELVATION -1
 #define INSTALLHEIGHT 1.85
-#define BASEFRAMEID "base"
 
 struct RadarUnit
 {
@@ -104,7 +104,7 @@ int socketGen()
     return sockfd;
 }
 
-float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf, float step)
+float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf)
 {
     int ind = 0;
     float vr = 0;
@@ -117,16 +117,16 @@ float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf, float step)
             {
                 vr = pointCloudVec[i].point[j].doppler /
                      cos(pointCloudVec[i].point[j].azi);
-                ind = (vr - vrMin) / step;
+                ind = (vr - vrMin) / vStep;
                 if (vr > vrMax || vr < vrMin || isnan(vr)) continue;
                 if (vr <= 0) histBuf[ind]++;
             }
         }
     }
-    return float((max_element(histBuf, histBuf + (int((vrMax - vrMin) / step))) - histBuf)) * step + vrMin;
+    return float((max_element(histBuf, histBuf + (int((vrMax - vrMin) / vStep))) - histBuf)) * vStep + vrMin;
 }
 
-void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>::Ptr cloud,int installFlag,float *rcsBuf,float step,float *histBuf,int pointNumPerPack)
+void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>::Ptr cloud,float *rcsBuf,float *histBuf,int pointNumPerPack)
 {
     pcl::PointXYZHSV cloudPoint;
     for(int i = 0;i<pointCloudVec.size();i++)
@@ -135,7 +135,7 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
         {
             if(abs(pointCloudVec[i].point[j].range)>0&&abs(pointCloudVec[i].point[j].azi)<=80*PI/180)
             {
-                pointCloudVec[i].point[j].ele = installFlag*(pointCloudVec[i].point[j].ele+0*PI/180);
+                pointCloudVec[i].point[j].ele = FLIPELELVATION*(pointCloudVec[i].point[j].ele+0*PI/180);
 
                 float azi = pointCloudVec[i].point[j].azi;
                 float cosEle = cos(pointCloudVec[i].point[j].ele); 
@@ -153,8 +153,8 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
             }
         }
     }
-    memset(histBuf, 0, sizeof(float) * int((vrMax - vrMin) / step));
-    float vrEst = hist(pointCloudVec, histBuf, step);
+    memset(histBuf, 0, sizeof(float) * int((vrMax - vrMin) / vStep));
+    float vrEst = hist(pointCloudVec, histBuf);
     float tmp;
     for (int i = 0; i < pointCloudVec.size(); i++) {
         for (int j = 0; j < pointNumPerPack; j++) {
@@ -222,6 +222,9 @@ int main(int argc, char** argv) {
         radars[radarId].pubCloud = nh.advertise<sensor_msgs::PointCloud2>(
             radars[radarId].topicName , 1);
     }
+
+    std:string baseFrameID ="base";
+    nh.getParam("altosRcuParameters/baseFrameID", baseFrameID);
     
     ros::Publisher markerPub = nh.advertise<visualization_msgs::Marker>("TEXT_VIEW_FACING", 10);
     ros::Publisher originPub = nh.advertise<visualization_msgs::Marker>("origin", 10);
@@ -231,7 +234,7 @@ int main(int argc, char** argv) {
     cloud->reserve(10000);
 
     visualization_msgs::Marker origin;
-    origin.header.frame_id = BASEFRAMEID;
+    origin.header.frame_id = baseFrameID;
     origin.type = visualization_msgs::Marker::SPHERE;
     origin.action = visualization_msgs::Marker::ADD;
 
@@ -279,7 +282,6 @@ int main(int argc, char** argv) {
     // pointcloud recv para
     POINTCLOUD          pointCloudBuf;
     char*               recvBuf = (char*)&pointCloudBuf;
-    int                 installFlag = -1;
     int                 pointNumPerPack = 30;
     int                 pointSizeByte = 44;
     int                 recvFrameLen = 0;
@@ -306,7 +308,7 @@ int main(int argc, char** argv) {
             
             if (((radars[radarId].curObjInd + 1) * pointNumPerPack >= pointCloudBuf.pckHeader.objectCount))
             {
-                calPoint(radars[radarId].pointCloudVec, cloud, installFlag, rcsBuf, vStep,
+                calPoint(radars[radarId].pointCloudVec, cloud, rcsBuf,
                          histBuf,pointNumPerPack);
 
                 // tf
@@ -327,7 +329,7 @@ int main(int argc, char** argv) {
                     tf::StampedTransform(
                         transform,
                         ros::Time::now(),
-                        BASEFRAMEID,
+                        baseFrameID,
                         radars[radarId].topicName
                     )
                 );
