@@ -104,7 +104,7 @@ int socketGen()
     return sockfd;
 }
 
-float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf)
+float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf, float yaw)
 {
     int ind = 0;
     float vr = 0;
@@ -116,9 +116,9 @@ float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf)
             if (abs(pointCloudVec[i].point[j].range) > 0)
             {
                 vr = pointCloudVec[i].point[j].doppler /
-                     cos(pointCloudVec[i].point[j].azi);
-                ind = (vr - vrMin) / vStep;
+                     cos(pointCloudVec[i].point[j].azi + yaw);
                 if (vr > vrMax || vr < vrMin || isnan(vr)) continue;
+                ind = (vr - vrMin) / vStep;
                 if (vr <= 0) histBuf[ind]++;
             }
         }
@@ -126,7 +126,7 @@ float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf)
     return float((max_element(histBuf, histBuf + (int((vrMax - vrMin) / vStep))) - histBuf)) * vStep + vrMin;
 }
 
-void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>::Ptr cloud,float *rcsBuf,float *histBuf,int pointNumPerPack)
+void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>::Ptr cloud,float *rcsBuf,float *histBuf,int pointNumPerPack,float yaw)
 {
     pcl::PointXYZHSV cloudPoint;
     for(int i = 0;i<pointCloudVec.size();i++)
@@ -154,7 +154,7 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
         }
     }
     memset(histBuf, 0, sizeof(float) * int((vrMax - vrMin) / vStep));
-    float vrEst = hist(pointCloudVec, histBuf);
+    float vrEst = hist(pointCloudVec, histBuf, yaw);
     float tmp;
     for (int i = 0; i < pointCloudVec.size(); i++) {
         for (int j = 0; j < pointNumPerPack; j++) {
@@ -164,7 +164,7 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
             }
             if (abs(pointCloudVec[i].point[j].range) > 0) {
                 tmp = (cloud->points[i * pointNumPerPack + j].h) -
-                      vrEst * cos(pointCloudVec[i].point[j].azi);
+                      vrEst * cos(pointCloudVec[i].point[j].azi + yaw);
                 if (tmp < -errThr) {
                     cloud->points[i * pointNumPerPack + j].v = -1;
                 } else if (tmp > errThr) {
@@ -309,7 +309,7 @@ int main(int argc, char** argv) {
             if (((radars[radarId].curObjInd + 1) * pointNumPerPack >= pointCloudBuf.pckHeader.objectCount))
             {
                 calPoint(radars[radarId].pointCloudVec, cloud, rcsBuf,
-                         histBuf,pointNumPerPack);
+                         histBuf,pointNumPerPack,radars[radarId].installParam[5]);
 
                 // tf
                 transform.setOrigin(
