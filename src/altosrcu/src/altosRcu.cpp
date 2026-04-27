@@ -344,6 +344,16 @@ int main(int argc, char** argv) {
                 output.header.stamp = ros::Time::now();
                 radars[radarId].pubCloud.publish(output);
 
+                //print measure time stamp
+                uint64_t sec = pointCloudBuf.pckHeader.sec;
+                uint32_t nsec = pointCloudBuf.pckHeader.nsec;
+                double measureTime = (double)sec + (double)nsec / 1e9;
+                ROS_INFO("measure time stamp of %d frame of %s: %lu.%09lu\n",
+                       pointCloudBuf.pckHeader.frame_id,
+                       radars[radarId].topicName.c_str(),
+                       (unsigned long)sec,
+                       (unsigned long)nsec);
+
                 originPub.publish(origin);
 
                 marker.header.frame_id=radars[radarId].topicName;
