@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <cstdint>
 #pragma pack(push, 1)
-#define POINTNUM 40
+#define POINTNUM 72
 struct V2Header {
 	uint32_t magic;  // always 0x6f746c41 in little endian. this will appear as "Alto" in wireshark
 	uint32_t nsec;  // nanoseconds
@@ -21,10 +21,6 @@ struct V2Point {
 	float azi;
 	float ele;
 	float snr;
-	float range_var;
-	float doppler_var;
-	float azi_var;
-	float ele_var;
 };
 typedef struct POINTCLOUD {
     V2Header pckHeader;
