@@ -28,7 +28,7 @@ using namespace std;
 #define errThr 3
 #define PI 3.1415926
 #define GROUPIP "224.1.2.4"
-#define GROUPPORT 4040
+#define GROUPPORT 4042
 #define LOCALIP "192.168.3.1"
 #define UNIPORT 4041
 #define UNIFLAG 0
