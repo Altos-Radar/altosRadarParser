@@ -285,7 +285,7 @@ int main(int argc, char** argv) {
     int                 pointSizeByte = sizeof(V2Point);
     int                 recvFrameLen = 0;
     float               vrEst = 0;
-    unsigned int        radarId;
+    uint8_t             radarId;
     unsigned char       mode;
     float*              histBuf = (float*)malloc(sizeof(float) * int((vrMax - vrMin) / vStep));
 
