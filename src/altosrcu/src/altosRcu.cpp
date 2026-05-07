@@ -1,4 +1,4 @@
-#include "pointCloud.h"
+#include "altos-pc-v2.h"
 #include <algorithm>
 #include <arpa/inet.h>
 #include <errno.h>
@@ -28,7 +28,7 @@ using namespace std;
 #define errThr 3
 #define PI 3.1415926
 #define GROUPIP "224.1.2.4"
-#define GROUPPORT 4040
+#define GROUPPORT 4042
 #define LOCALIP "192.168.3.1"
 #define UNIPORT 4041
 #define UNIFLAG 0
@@ -44,7 +44,6 @@ struct RadarUnit
     vector<POINTCLOUD> pointCloudVec;
 
     int cntPointCloud = 0;
-    unsigned short curObjInd = 0;
 };
 
 float rcsCal(float range, float azi, float snr, float* rcsBuf) {
@@ -282,11 +281,11 @@ int main(int argc, char** argv) {
     // pointcloud recv para
     POINTCLOUD          pointCloudBuf;
     char*               recvBuf = (char*)&pointCloudBuf;
-    int                 pointNumPerPack = 30;
-    int                 pointSizeByte = 44;
+    int                 pointNumPerPack = POINTNUM;
+    int                 pointSizeByte = sizeof(V2Point);
     int                 recvFrameLen = 0;
     float               vrEst = 0;
-    unsigned int        radarId;
+    uint8_t             radarId;
     unsigned char       mode;
     float*              histBuf = (float*)malloc(sizeof(float) * int((vrMax - vrMin) / vStep));
 
@@ -296,9 +295,9 @@ int main(int argc, char** argv) {
         int ret = recvfrom(sockfd, recvBuf, sizeof(POINTCLOUD), 0, (struct sockaddr *)&from, &len);
         if (ret > 0)
 		{
-            radarId = pointCloudBuf.pckHeader.reserved[0];
-            radars[radarId].curObjInd = pointCloudBuf.pckHeader.curObjInd;
-            radars[radarId].cntPointCloud = pointCloudBuf.pckHeader.objectCount;
+            radarId = pointCloudBuf.pckHeader.radar_id;
+            radars[radarId].cntPointCloud = pointCloudBuf.pckHeader.length / pointSizeByte;
+            uint32_t offset = pointCloudBuf.pckHeader.offset;
             if (radarId >= RADARNUM)
             {
                 ROS_ERROR("radarId = %u in PCKHEADER.reserved > %u ", radarId, RADARNUM);
@@ -306,7 +305,7 @@ int main(int argc, char** argv) {
             }
             radars[radarId].pointCloudVec.push_back(pointCloudBuf);
             
-            if (((radars[radarId].curObjInd + 1) * pointNumPerPack >= pointCloudBuf.pckHeader.objectCount))
+            if ((offset / pointSizeByte + pointNumPerPack) >= radars[radarId].cntPointCloud)
             {
                 calPoint(radars[radarId].pointCloudVec, cloud, rcsBuf,
                          histBuf,pointNumPerPack,radars[radarId].installParam[5]);
@@ -339,11 +338,21 @@ int main(int argc, char** argv) {
                 output.header.frame_id = radars[radarId].topicName;
                 output.header.stamp = ros::Time::now();
                 ROS_INFO("pointNum of %d frame of %s: %d\n",
-                       pointCloudBuf.pckHeader.frameId,
+                       pointCloudBuf.pckHeader.frame_id,
                        radars[radarId].topicName.c_str(),
                        radars[radarId].cntPointCloud);
                 output.header.stamp = ros::Time::now();
                 radars[radarId].pubCloud.publish(output);
+
+                //print measure time stamp
+                uint64_t sec = pointCloudBuf.pckHeader.sec;
+                uint32_t nsec = pointCloudBuf.pckHeader.nsec;
+                double measureTime = (double)sec + (double)nsec / 1e9;
+                ROS_INFO("measure time stamp of %d frame of %s: %lu.%09lu\n",
+                       pointCloudBuf.pckHeader.frame_id,
+                       radars[radarId].topicName.c_str(),
+                       (unsigned long)sec,
+                       (unsigned long)nsec);
 
                 originPub.publish(origin);
 
