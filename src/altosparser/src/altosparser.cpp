@@ -48,7 +48,7 @@ struct RadarUnit
 
 float rcsCal(float range, float azi, float snr, float* rcsBuf) {
     int ind = (azi * 180 / PI + 60.1) * 10;
-    float rcs = powf32(range, 2.6) * snr / 5.0e6 / rcsBuf[ind];
+    float rcs = powf32(range, 2.6f) * snr / 5.0e6f / rcsBuf[ind];
 
     return rcs;
 }
@@ -108,7 +108,7 @@ float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf, float yaw)
     int ind = 0;
     float vr = 0;
 
-    for (int i = 0; i < pointCloudVec.size(); i++)
+    for (size_t i = 0; i < pointCloudVec.size(); i++)
     {
         for (int j = 0; j < 30; j++)
         {
@@ -125,12 +125,12 @@ float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf, float yaw)
     return float((max_element(histBuf, histBuf + (int((vrMax - vrMin) / vStep))) - histBuf)) * vStep + vrMin;
 }
 
-void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>::Ptr cloud,float *rcsBuf,float *histBuf,int pointNumPerPack,float yaw)
+void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>::Ptr cloud,float *rcsBuf,float *histBuf,size_t pointNumPerPack,float yaw)
 {
     pcl::PointXYZHSV cloudPoint;
-    for(int i = 0;i<pointCloudVec.size();i++)
+    for(size_t i = 0;i<pointCloudVec.size();i++)
     {
-        for(int j = 0;j<pointNumPerPack;j++)
+        for(size_t j = 0;j<pointNumPerPack;j++)
         {
             if(abs(pointCloudVec[i].point[j].range)>0&&abs(pointCloudVec[i].point[j].azi)<=80*PI/180)
             {
@@ -155,8 +155,8 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
     memset(histBuf, 0, sizeof(float) * int((vrMax - vrMin) / vStep));
     float vrEst = hist(pointCloudVec, histBuf, yaw);
     float tmp;
-    for (int i = 0; i < pointCloudVec.size(); i++) {
-        for (int j = 0; j < pointNumPerPack; j++) {
+    for (size_t i = 0; i < pointCloudVec.size(); i++) {
+        for (size_t j = 0; j < pointNumPerPack; j++) {
             if(i*pointNumPerPack+j>=cloud->size())
             {
                 break;
@@ -190,7 +190,7 @@ int main(int argc, char** argv) {
     fclose(fp_rcs);
 
     // ros Init
-    ros::init(argc, argv, "altosParser");
+    ros::init(argc, argv, "altosparser");
     ros::NodeHandle nh;
 
     int numRadar = 4;
@@ -202,7 +202,7 @@ int main(int argc, char** argv) {
     }
     std::vector<RadarUnit> radars(numRadar);
 
-    std:string baseFrameID ="base";
+    std::string baseFrameID ="base";
     nh.getParam("altosParserParameters/baseFrameID", baseFrameID);
 
     bool sendTF;
@@ -216,6 +216,10 @@ int main(int argc, char** argv) {
         {
             ROS_ERROR("radar%d topic name is empty!", radarId);
             return -1;
+        }
+        else
+        {
+            ROS_INFO("radar%d topic name is %s", radarId, radars[radarId].topicName.c_str());
         }
 
         std::vector<double> tmpVec;
@@ -291,12 +295,9 @@ int main(int argc, char** argv) {
     // pointcloud recv para
     POINTCLOUD          pointCloudBuf;
     char*               recvBuf = (char*)&pointCloudBuf;
-    int                 pointNumPerPack = POINTNUM;
+    size_t              pointNumPerPack = POINTNUM;
     int                 pointSizeByte = sizeof(V2Point);
-    int                 recvFrameLen = 0;
-    float               vrEst = 0;
     uint8_t             radarId;
-    unsigned char       mode;
     float*              histBuf = (float*)malloc(sizeof(float) * int((vrMax - vrMin) / vStep));
 
     while(ros::ok())
@@ -359,7 +360,6 @@ int main(int argc, char** argv) {
                 //print measure time stamp
                 uint64_t sec = pointCloudBuf.pckHeader.sec;
                 uint32_t nsec = pointCloudBuf.pckHeader.nsec;
-                double measureTime = (double)sec + (double)nsec / 1e9;
                 ROS_INFO("measure time stamp of %d frame of %s: %lu.%09lu\n",
                        pointCloudBuf.pckHeader.frame_id,
                        radars[radarId].topicName.c_str(),
