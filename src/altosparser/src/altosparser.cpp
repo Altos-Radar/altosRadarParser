@@ -200,7 +200,7 @@ int main(int argc, char** argv) {
         ROS_ERROR("numRadar is %d, must be 1 (V4) or 4 (RCU)", numRadar);
         return -1;
     }
-    std::array<RadarUnit, numRadar> radars;
+    std::vector<RadarUnit> radars(numRadar);
 
     std:string baseFrameID ="base";
     nh.getParam("altosParserParameters/baseFrameID", baseFrameID);
@@ -308,7 +308,7 @@ int main(int argc, char** argv) {
             radarId = pointCloudBuf.pckHeader.radar_id;
             radars[radarId].cntPointCloud = pointCloudBuf.pckHeader.length / pointSizeByte;
             uint32_t offset = pointCloudBuf.pckHeader.offset;
-            if (radarId >= RADARNUM)
+            if (radarId >= numRadar)
             {
                 ROS_ERROR("radarId = %u in PCKHEADER.reserved >= numRadar = %u ", radarId, numRadar);
                 continue; 
