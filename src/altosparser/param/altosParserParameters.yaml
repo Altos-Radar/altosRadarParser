@@ -1,4 +1,4 @@
-altosRcuParameters:
+altosParserParameters:
     numRadar: 4 # set to 1 for V4, 4 for RCU
     baseFrameID: 'base' # base frame ID for TF
     sendTF: true # send TF between radar and base frame

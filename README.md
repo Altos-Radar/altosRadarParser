@@ -1,11 +1,15 @@
-# altosRadarRosRCU
+# altosRadarRosParser
 
-## Build and Run
-1. git clone https://github.com/Altos-Radar/altosRadarRCU.git
-2. cd altosRadarRCU
+## Build
+1. git clone https://github.com/Altos-Radar/altosRadarParser.git
+2. cd altosRadarParser
 3. catkin_make
-4. bash start.sh
 
-## Parameters
-change topic name and installation parameters
-altosRadarRCU/src/altosrcu/param/altosRcuParameters.yaml
+## Set Parameters
+altosRadarRCU/src/altosrcu/param/altosRcuParameters.yaml  
+change numRadar to 1 for V4, 4 for RCU  
+change topic name and installation parameters  
+
+## Run
+1. cd altosRadarParser
+2. bash start.sh

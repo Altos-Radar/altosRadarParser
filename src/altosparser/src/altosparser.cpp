@@ -190,11 +190,11 @@ int main(int argc, char** argv) {
     fclose(fp_rcs);
 
     // ros Init
-    ros::init(argc, argv, "altosRcu");
+    ros::init(argc, argv, "altosParser");
     ros::NodeHandle nh;
 
     int numRadar = 4;
-    nh.getParam("altosRcuParameters/numRadar", numRadar);
+    nh.getParam("altosParserParameters/numRadar", numRadar);
     if (numRadar != 1 && numRadar != 4)
     {
         ROS_ERROR("numRadar is %d, must be 1 (V4) or 4 (RCU)", numRadar);
@@ -203,14 +203,14 @@ int main(int argc, char** argv) {
     std::array<RadarUnit, numRadar> radars;
 
     std:string baseFrameID ="base";
-    nh.getParam("altosRcuParameters/baseFrameID", baseFrameID);
+    nh.getParam("altosParserParameters/baseFrameID", baseFrameID);
 
     bool sendTF;
-    nh.getParam("altosRcuParameters/sendTF", sendTF);
+    nh.getParam("altosParserParameters/sendTF", sendTF);
 
     for (int radarId = 0; radarId < numRadar; radarId++)
     {
-        std::string paramPath = "altosRcuParameters/radar" + std::to_string(radarId);
+        std::string paramPath = "altosParserParameters/radar" + std::to_string(radarId);
         nh.getParam(paramPath + "/topicName", radars[radarId].topicName);
         if (radars[radarId].topicName.empty())
         {
