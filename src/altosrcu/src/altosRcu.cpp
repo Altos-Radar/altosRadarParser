@@ -178,10 +178,7 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
 
 int main(int argc, char** argv) {
     
-    const int RADARNUM = 4;
-    std::array<RadarUnit, RADARNUM> radars;
-
-    // rcs read
+    // read files for rcs calculation
     float* rcsBuf = (float*)malloc(1201 * sizeof(float));
     FILE* fp_rcs = fopen("data//rcs.dat", "rb");
     if (fp_rcs == NULL)
@@ -196,15 +193,36 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "altosRcu");
     ros::NodeHandle nh;
 
-    for (int radarId = 0; radarId < RADARNUM; radarId++)
+    int numRadar = 4;
+    nh.getParam("altosRcuParameters/numRadar", numRadar);
+    if (numRadar != 1 && numRadar != 4)
+    {
+        ROS_ERROR("numRadar is %d, must be 1 (V4) or 4 (RCU)", numRadar);
+        return -1;
+    }
+    std::array<RadarUnit, numRadar> radars;
+
+    std:string baseFrameID ="base";
+    nh.getParam("altosRcuParameters/baseFrameID", baseFrameID);
+
+    bool sendTF;
+    nh.getParam("altosRcuParameters/sendTF", sendTF);
+
+    for (int radarId = 0; radarId < numRadar; radarId++)
     {
         std::string paramPath = "altosRcuParameters/radar" + std::to_string(radarId);
         nh.getParam(paramPath + "/topicName", radars[radarId].topicName);
+        if (radars[radarId].topicName.empty())
+        {
+            ROS_ERROR("radar%d topic name is empty!", radarId);
+            return -1;
+        }
+
         std::vector<double> tmpVec;
         nh.getParam(paramPath + "/installationParam", tmpVec);
         if (tmpVec.size() != 6)
         {
-            ROS_ERROR("Radar %d: Invalid installation parameters! Required 6 values, got %ld.", radarId, tmpVec.size());
+            ROS_ERROR("radar%d: Invalid installation parameters! Required 6 values, got %ld.", radarId, tmpVec.size());
             return -1;
         }
         for (int i = 3; i < 6; i++)
@@ -213,18 +231,10 @@ int main(int argc, char** argv) {
         }
         std::copy(tmpVec.begin(), tmpVec.end(), radars[radarId].installParam.begin());
     
-        if (radars[radarId].topicName.empty())
-        {
-            ROS_ERROR("radar%d topic name is empty!", radarId);
-            return -1;
-        }
         radars[radarId].pubCloud = nh.advertise<sensor_msgs::PointCloud2>(
             radars[radarId].topicName , 1);
     }
 
-    std:string baseFrameID ="base";
-    nh.getParam("altosRcuParameters/baseFrameID", baseFrameID);
-    
     ros::Publisher markerPub = nh.advertise<visualization_msgs::Marker>("TEXT_VIEW_FACING", 10);
     ros::Publisher originPub = nh.advertise<visualization_msgs::Marker>("origin", 10);
 
@@ -300,7 +310,7 @@ int main(int argc, char** argv) {
             uint32_t offset = pointCloudBuf.pckHeader.offset;
             if (radarId >= RADARNUM)
             {
-                ROS_ERROR("radarId = %u in PCKHEADER.reserved > %u ", radarId, RADARNUM);
+                ROS_ERROR("radarId = %u in PCKHEADER.reserved >= numRadar = %u ", radarId, numRadar);
                 continue; 
             }
             radars[radarId].pointCloudVec.push_back(pointCloudBuf);
@@ -311,28 +321,31 @@ int main(int argc, char** argv) {
                          histBuf,pointNumPerPack,radars[radarId].installParam[5]);
 
                 // tf
-                transform.setOrigin(
-                    tf::Vector3(
-                        radars[radarId].installParam[0],
-                        radars[radarId].installParam[1], 
-                        radars[radarId].installParam[2]
-                    )
-                ); // x, y, z
-                q.setRPY(
-                    radars[radarId].installParam[3], 
-                    radars[radarId].installParam[4], 
-                    radars[radarId].installParam[5]
-                ); // roll, pitch, yaw
-                transform.setRotation(q);
-                tfBr.sendTransform(
-                    tf::StampedTransform(
-                        transform,
-                        ros::Time::now(),
-                        baseFrameID,
-                        radars[radarId].topicName
-                    )
-                );
-
+                if(sendTF)
+                {
+                    transform.setOrigin(
+                        tf::Vector3(
+                            radars[radarId].installParam[0],
+                            radars[radarId].installParam[1], 
+                            radars[radarId].installParam[2]
+                        )
+                    ); // x, y, z
+                    q.setRPY(
+                        radars[radarId].installParam[3], 
+                        radars[radarId].installParam[4], 
+                        radars[radarId].installParam[5]
+                    ); // roll, pitch, yaw
+                    transform.setRotation(q);
+                    tfBr.sendTransform(
+                        tf::StampedTransform(
+                            transform,
+                            ros::Time::now(),
+                            baseFrameID,
+                            radars[radarId].topicName
+                        )
+                    );
+                }
+                
                 //pub point cloud
                 pcl::toROSMsg(*cloud, output);
                 output.header.frame_id = radars[radarId].topicName;
