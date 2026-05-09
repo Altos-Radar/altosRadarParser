@@ -349,7 +349,6 @@ int main(int argc, char** argv) {
                 //pub point cloud
                 pcl::toROSMsg(*cloud, output);
                 output.header.frame_id = radars[radarId].topicName;
-                output.header.stamp = ros::Time::now();
                 ROS_INFO("pointNum of %d frame of %s: %d\n",
                        pointCloudBuf.pckHeader.frame_id,
                        radars[radarId].topicName.c_str(),
