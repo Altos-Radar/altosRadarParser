@@ -6,7 +6,7 @@
 3. catkin_make
 
 ## Set Parameters
-altosRadarRCU/src/altosrcu/param/altosRcuParameters.yaml  
+altosRadarParser/src/altosparser/param/altosParserParameters.yaml  
 change numRadar to 1 for V4, 4 for RCU  
 change topic name and installation parameters  
 
