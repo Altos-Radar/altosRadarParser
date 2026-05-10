@@ -6,10 +6,11 @@
 3. catkin_make
 
 ## Set Parameters
-altosRadarParser/src/altosparser/param/altosParserParameters.yaml  
-change numRadar to 1 for V4, 4 for RCU  
-change topic name and installation parameters  
+V4: altosRadarParser/src/altosparser/param/altosParserV4.yaml  
+RCU: altosRadarParser/src/altosparser/param/altosParserRCU.yaml  
+set topic name, installation parameters, IP, port, etc.  
 
 ## Run
-1. cd altosRadarParser
-2. bash start.sh
+V4: bash startV4.sh  
+RCU: bash startRcu.sh  
+V4+RCU: bash startBoth.sh

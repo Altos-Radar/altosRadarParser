@@ -28,11 +28,6 @@ using namespace std;
 #define vStep 0.1
 #define errThr 3
 #define PI 3.1415926
-#define GROUPIP "224.1.2.4"
-#define GROUPPORT 4040
-#define LOCALIP "192.168.3.1"
-#define UNIPORT 4041
-#define UNIFLAG 0
 #define FLIPELELVATION -1
 #define INSTALLHEIGHT 1.85
 
@@ -54,7 +49,7 @@ float rcsCal(float range, float azi, float snr, float* rcsBuf) {
     return rcs;
 }
 
-int socketGen()
+int socketGen(string groupIp, int groupPort, string localIp, int uniPort, bool uniFlag)
 {
     struct sockaddr_in addr;
 
@@ -70,11 +65,11 @@ int socketGen()
     setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout,
                sizeof(struct timeval));
     memset(&addr, 0, sizeof(addr));
-    if(UNIFLAG)
+    if(uniFlag)
     {
         addr.sin_family = AF_INET;
-        addr.sin_port = htons(UNIPORT);
-        addr.sin_addr.s_addr = inet_addr(LOCALIP);
+        addr.sin_port = htons(uniPort);
+        addr.sin_addr.s_addr = inet_addr(localIp.c_str());
         int ret = bind(sockfd, (struct sockaddr*)&addr, sizeof(addr));
         if (-1 == ret) {
             perror("bind");
@@ -83,7 +78,7 @@ int socketGen()
     }else
     {
         addr.sin_family = AF_INET;
-        addr.sin_port = htons(GROUPPORT);
+        addr.sin_port = htons(groupPort);
         addr.sin_addr.s_addr = INADDR_ANY;
         int ret = bind(sockfd, (struct sockaddr*)&addr, sizeof(addr));
         if (-1 == ret) {
@@ -91,8 +86,8 @@ int socketGen()
             return -1;
         }
 
-        req.imr_multiaddr.s_addr = inet_addr(GROUPIP);
-        req.imr_interface.s_addr = inet_addr(LOCALIP);
+        req.imr_multiaddr.s_addr = inet_addr(groupIp.c_str());
+        req.imr_interface.s_addr = inet_addr(localIp.c_str());
         ;
         ret = setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &req, sizeof(req));
         if (ret < 0) {
@@ -196,8 +191,17 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "altosparser");
     ros::NodeHandle nh;
 
+    int groupPort = 4040, uniPort = 4041;
+    std::string groupIp = "224.1.2.4", localIp = "192.168.3.1";
+    bool uniFlag = false;
+    nh.getParam("groupIp", groupIp);
+    nh.getParam("groupPort", groupPort);
+    nh.getParam("localIp", localIp);
+    nh.getParam("uniPort", uniPort);
+    nh.getParam("uniFlag", uniFlag);
+
     int numRadar = 4;
-    nh.getParam("altosParserParameters/numRadar", numRadar);
+    nh.getParam("numRadar", numRadar);
     if (numRadar != 1 && numRadar != 4)
     {
         ROS_ERROR("numRadar is %d, must be 1 (V4) or 4 (RCU)", numRadar);
@@ -206,14 +210,14 @@ int main(int argc, char** argv) {
     std::vector<RadarUnit> radars(numRadar);
 
     std::string baseFrameID ="base";
-    nh.getParam("altosParserParameters/baseFrameID", baseFrameID);
+    nh.getParam("baseFrameID", baseFrameID);
 
     bool sendTF;
-    nh.getParam("altosParserParameters/sendTF", sendTF);
+    nh.getParam("sendTF", sendTF);
 
     for (int radarId = 0; radarId < numRadar; radarId++)
     {
-        std::string paramPath = "altosParserParameters/radar" + std::to_string(radarId);
+        std::string paramPath = "radar" + std::to_string(radarId);
         nh.getParam(paramPath + "/topicName", radars[radarId].topicName);
         if (radars[radarId].topicName.empty())
         {
@@ -242,8 +246,8 @@ int main(int argc, char** argv) {
             radars[radarId].topicName , 1);
     }
 
-    ros::Publisher markerPub = nh.advertise<visualization_msgs::Marker>("TEXT_VIEW_FACING", 10);
-    ros::Publisher originPub = nh.advertise<visualization_msgs::Marker>("origin", 10);
+    ros::Publisher markerPub = nh.advertise<visualization_msgs::Marker>("/pointNum", 10);
+    ros::Publisher originPub = nh.advertise<visualization_msgs::Marker>("/origin", 10);
 
     sensor_msgs::PointCloud2 output;
     pcl::PointCloud<pcl::PointXYZHSV>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZHSV>);
@@ -293,7 +297,7 @@ int main(int argc, char** argv) {
     // socket Gen
     struct sockaddr_in  from;
     socklen_t           len = sizeof(from);
-    int                 sockfd = socketGen();
+    int                 sockfd = socketGen(groupIp, groupPort, localIp, uniPort, uniFlag);
     
     // pointcloud recv para
     POINTCLOUD          pointCloudBuf;

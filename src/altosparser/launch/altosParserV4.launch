@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <group ns="v4">
+        <rosparam file="$(find altosparser)/param/altosParserV4.yaml" command="load"/>
+        <node pkg="altosparser" type="altosparser" name="altosparser" output="screen"/>
+    </group>
+</launch>
