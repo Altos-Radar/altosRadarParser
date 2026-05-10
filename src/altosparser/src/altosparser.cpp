@@ -8,6 +8,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <ros/ros.h>
+#include <ros/package.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -180,7 +181,9 @@ int main(int argc, char** argv) {
     
     // read files for rcs calculation
     float* rcsBuf = (float*)malloc(1201 * sizeof(float));
-    FILE* fp_rcs = fopen("data//rcs.dat", "rb");
+    std::string package_path = ros::package::getPath("altosparser");
+    std::string file_path = package_path + "/data/rcs.dat";
+    FILE* fp_rcs = fopen(file_path.c_str(), "rb");
     if (fp_rcs == NULL)
     {
         ROS_ERROR("[WARNING] data/rcs.dat not found in pwd [WARNING]\n");

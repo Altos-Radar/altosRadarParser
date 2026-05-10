@@ -8,7 +8,7 @@ project(altosparser)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-  message_generation pcl_ros roscpp rospy sensor_msgs std_msgs tf)
+  message_generation pcl_ros roscpp rospy roslib sensor_msgs std_msgs tf)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -102,7 +102,7 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES altosparser
-  CATKIN_DEPENDS message_runtime
+  CATKIN_DEPENDS message_runtime roscpp roslib
 #  DEPENDS system_lib
 )
 
