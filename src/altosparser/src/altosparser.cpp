@@ -49,7 +49,7 @@ float rcsCal(float range, float azi, float snr, float* rcsBuf) {
     return rcs;
 }
 
-int socketGen(string groupIp, int groupPort, string localIp, int uniPort, bool uniFlag)
+int socketGen(string groupIp, int destPort, string localIp, bool uniFlag)
 {
     struct sockaddr_in addr;
 
@@ -68,7 +68,7 @@ int socketGen(string groupIp, int groupPort, string localIp, int uniPort, bool u
     if(uniFlag)
     {
         addr.sin_family = AF_INET;
-        addr.sin_port = htons(uniPort);
+        addr.sin_port = htons(destPort);
         addr.sin_addr.s_addr = inet_addr(localIp.c_str());
         int ret = bind(sockfd, (struct sockaddr*)&addr, sizeof(addr));
         if (-1 == ret) {
@@ -78,7 +78,7 @@ int socketGen(string groupIp, int groupPort, string localIp, int uniPort, bool u
     }else
     {
         addr.sin_family = AF_INET;
-        addr.sin_port = htons(groupPort);
+        addr.sin_port = htons(destPort);
         addr.sin_addr.s_addr = INADDR_ANY;
         int ret = bind(sockfd, (struct sockaddr*)&addr, sizeof(addr));
         if (-1 == ret) {
@@ -191,13 +191,12 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "altosparser");
     ros::NodeHandle nh;
 
-    int groupPort = 4040, uniPort = 4041;
+    int destPort = 4040;
     std::string groupIp = "224.1.2.4", localIp = "192.168.3.1";
     bool uniFlag = false;
     nh.getParam("groupIp", groupIp);
-    nh.getParam("groupPort", groupPort);
+    nh.getParam("destPort", destPort);
     nh.getParam("localIp", localIp);
-    nh.getParam("uniPort", uniPort);
     nh.getParam("uniFlag", uniFlag);
 
     int numRadar = 4;
@@ -297,7 +296,7 @@ int main(int argc, char** argv) {
     // socket Gen
     struct sockaddr_in  from;
     socklen_t           len = sizeof(from);
-    int                 sockfd = socketGen(groupIp, groupPort, localIp, uniPort, uniFlag);
+    int                 sockfd = socketGen(groupIp, destPort, localIp, uniFlag);
     
     // pointcloud recv para
     POINTCLOUD          pointCloudBuf;
