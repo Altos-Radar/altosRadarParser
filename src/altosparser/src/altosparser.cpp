@@ -29,7 +29,6 @@ using namespace std;
 #define errThr 3
 #define PI 3.1415926
 #define FLIPELELVATION -1
-#define INSTALLHEIGHT 1.85
 
 struct RadarUnit
 {
@@ -121,7 +120,8 @@ float hist(vector<POINTCLOUD> pointCloudVec, float* histBuf, float yaw)
     return float((max_element(histBuf, histBuf + (int((vrMax - vrMin) / vStep))) - histBuf)) * vStep + vrMin;
 }
 
-void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>::Ptr cloud,float *rcsBuf,float *histBuf,size_t pointNumPerPack,float yaw)
+void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>::Ptr cloud,float *rcsBuf,float *histBuf,
+    size_t pointNumPerPack,float yaw, bool flipPtsBelowGrd, float dist2Grd, bool velAmbResolve)
 {
     pcl::PointXYZHSV cloudPoint;
     for(size_t i = 0;i<pointCloudVec.size();i++)
@@ -137,10 +137,11 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
                 cloudPoint.x = (pointCloudVec[i].point[j].range)*cos(azi)*cosEle; 
                 cloudPoint.y = (pointCloudVec[i].point[j].range)*sin(azi)*cosEle;
                 cloudPoint.z = (pointCloudVec[i].point[j].range)*sin(pointCloudVec[i].point[j].ele) ; 
-                // if(cloudPoint.z < -INSTALLHEIGHT)
-                // {
-                //    cloudPoint.z = -cloudPoint.z - 2*INSTALLHEIGHT;
-                // }
+                // flip points below ground
+                if(flipPtsBelowGrd && cloudPoint.z < -dist2Grd)
+                {
+                   cloudPoint.z = -cloudPoint.z - 2*dist2Grd;
+                }
                 cloudPoint.h = pointCloudVec[i].point[j].doppler; 
                 cloudPoint.s = pointCloudVec[i].point[j].snr;
                 //rcsCal(pointCloudVec[i].point[j].range,pointCloudVec[i].point[j].azi,pointCloudVec[i].point[j].snr,rcsBuf);
@@ -150,7 +151,8 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
     }
     memset(histBuf, 0, sizeof(float) * int((vrMax - vrMin) / vStep));
     float vrEst = hist(pointCloudVec, histBuf, yaw);
-    float tmp;
+    float vDiff, vAmb ,vUnAmb;
+    float vAmbMax = 44.98;
     for (size_t i = 0; i < pointCloudVec.size(); i++) {
         for (size_t j = 0; j < pointNumPerPack; j++) {
             if(i*pointNumPerPack+j>=cloud->size())
@@ -158,11 +160,24 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
                 break;
             }
             if (abs(pointCloudVec[i].point[j].range) > 0) {
-                tmp = (cloud->points[i * pointNumPerPack + j].h) -
-                      vrEst * cos(pointCloudVec[i].point[j].azi + yaw);
-                if (tmp < -errThr) {
+                vAmb = cloud->points[i * pointNumPerPack + j].h;
+                vUnAmb = vAmb;
+                // velocity ambiguity resolution
+                if (velAmbResolve)
+                {
+                    if (vAmb > vAmbMax - vrEst) {
+                        vUnAmb = vAmb - 2*vAmbMax;
+                        cloud->points[i * pointNumPerPack + j].h = vUnAmb;
+                    } else if (vAmb < -vAmbMax - vrEst) {
+                        vUnAmb = vAmb + 2*vAmbMax;
+                        cloud->points[i * pointNumPerPack + j].h = vUnAmb;
+                    }
+                }
+                // moving target indication
+                vDiff = vUnAmb - vrEst * cos(pointCloudVec[i].point[j].azi + yaw);
+                if (vDiff < -errThr) {
                     cloud->points[i * pointNumPerPack + j].v = -1;
-                } else if (tmp > errThr) {
+                } else if (vDiff > errThr) {
                     cloud->points[i * pointNumPerPack + j].v = 1;
                 } else {
                     cloud->points[i * pointNumPerPack + j].v = 0;
@@ -211,8 +226,13 @@ int main(int argc, char** argv) {
     std::string baseFrameID ="base";
     nh.getParam("baseFrameID", baseFrameID);
 
-    bool sendTF;
+    bool sendTF = true, flipPtsBelowGrd = false, velAmbResolve = false;
+    float dist2Grd = 1000;
     nh.getParam("sendTF", sendTF);
+    nh.getParam("flipPtsBelowGrd", flipPtsBelowGrd);
+    nh.getParam("velAmbResolve", velAmbResolve);
+    nh.getParam("dist2Grd", dist2Grd);
+    float vAmbMax = 44.98;
 
     for (int radarId = 0; radarId < numRadar; radarId++)
     {
@@ -325,7 +345,8 @@ int main(int argc, char** argv) {
             if ((offset / pointSizeByte + pointNumPerPack) >= radars[radarId].cntPointCloud)
             {
                 calPoint(radars[radarId].pointCloudVec, cloud, rcsBuf,
-                         histBuf,pointNumPerPack,radars[radarId].installParam[5]);
+                         histBuf,pointNumPerPack,radars[radarId].installParam[5],
+                         flipPtsBelowGrd, dist2Grd, velAmbResolve);
 
                 // tf
                 if(sendTF)

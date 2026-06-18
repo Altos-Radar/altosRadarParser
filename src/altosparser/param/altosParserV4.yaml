@@ -8,3 +8,6 @@ groupIp: '224.1.2.4'
 destPort: 4040
 localIp: '192.168.3.1'
 uniFlag: false
+flipPtsBelowGrd: false # flip points below ground
+dist2Grd: 1.8 # distance to ground [m]
+velAmbResolve: false # velocity ambiguity resolution
