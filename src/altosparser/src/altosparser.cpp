@@ -26,7 +26,8 @@ using namespace std;
 #define vrMax 60
 #define vrMin -60
 #define vStep 0.1
-#define errThr 3
+#define mtiThr 3
+#define vAmbMax 44.98
 #define PI 3.1415926
 #define FLIPELELVATION -1
 
@@ -150,9 +151,8 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
         }
     }
     memset(histBuf, 0, sizeof(float) * int((vrMax - vrMin) / vStep));
-    float vrEst = hist(pointCloudVec, histBuf, yaw);
-    float vDiff, vAmb ,vUnAmb;
-    float vAmbMax = 44.98;
+    float vEgoEst = hist(pointCloudVec, histBuf, yaw);
+    float vDiff, vAmb ,vUnAmb, vEgoCos;
     for (size_t i = 0; i < pointCloudVec.size(); i++) {
         for (size_t j = 0; j < pointNumPerPack; j++) {
             if(i*pointNumPerPack+j>=cloud->size())
@@ -161,23 +161,25 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
             }
             if (abs(pointCloudVec[i].point[j].range) > 0) {
                 vAmb = cloud->points[i * pointNumPerPack + j].h;
-                vUnAmb = vAmb;
+                vEgoCos = vEgoEst * cos(pointCloudVec[i].point[j].azi + yaw);
+                vDiff = vAmb - vEgoCos;
                 // velocity ambiguity resolution
                 if (velAmbResolve)
                 {
-                    if (vAmb > vAmbMax + vrEst) {
+                    if (vDiff > vAmbMax) {
                         vUnAmb = vAmb - 2*vAmbMax;
                         cloud->points[i * pointNumPerPack + j].h = vUnAmb;
-                    } else if (vAmb < -vAmbMax + vrEst) {
+                        vDiff = vUnAmb - vEgoCos;
+                    } else if (vDiff < -vAmbMax) {
                         vUnAmb = vAmb + 2*vAmbMax;
                         cloud->points[i * pointNumPerPack + j].h = vUnAmb;
+                        vDiff = vUnAmb - vEgoCos;
                     }
                 }
                 // moving target indication
-                vDiff = vUnAmb - vrEst * cos(pointCloudVec[i].point[j].azi + yaw);
-                if (vDiff < -errThr) {
+                if (vDiff < -mtiThr) {
                     cloud->points[i * pointNumPerPack + j].v = -1;
-                } else if (vDiff > errThr) {
+                } else if (vDiff > mtiThr) {
                     cloud->points[i * pointNumPerPack + j].v = 1;
                 } else {
                     cloud->points[i * pointNumPerPack + j].v = 0;
@@ -232,7 +234,6 @@ int main(int argc, char** argv) {
     nh.getParam("flipPtsBelowGrd", flipPtsBelowGrd);
     nh.getParam("velAmbResolve", velAmbResolve);
     nh.getParam("dist2Grd", dist2Grd);
-    float vAmbMax = 44.98;
 
     for (int radarId = 0; radarId < numRadar; radarId++)
     {
