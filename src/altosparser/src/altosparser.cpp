@@ -165,10 +165,10 @@ void calPoint(vector<POINTCLOUD> pointCloudVec,pcl::PointCloud<pcl::PointXYZHSV>
                 // velocity ambiguity resolution
                 if (velAmbResolve)
                 {
-                    if (vAmb > vAmbMax - vrEst) {
+                    if (vAmb > vAmbMax + vrEst) {
                         vUnAmb = vAmb - 2*vAmbMax;
                         cloud->points[i * pointNumPerPack + j].h = vUnAmb;
-                    } else if (vAmb < -vAmbMax - vrEst) {
+                    } else if (vAmb < -vAmbMax + vrEst) {
                         vUnAmb = vAmb + 2*vAmbMax;
                         cloud->points[i * pointNumPerPack + j].h = vUnAmb;
                     }
